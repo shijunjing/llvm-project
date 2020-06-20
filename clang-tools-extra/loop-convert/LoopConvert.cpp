@@ -7,22 +7,57 @@
 #include "clang/ASTMatchers/ASTMatchers.h"
 #include "clang/ASTMatchers/ASTMatchFinder.h"
 
+#include "clang/AST/ASTContext.h"
+
 using namespace clang::tooling;
 using namespace llvm;
 using namespace clang;
 using namespace clang::ast_matchers;
 
 StatementMatcher LoopMatcher =
-  forStmt(hasLoopInit(declStmt(hasSingleDecl(varDecl(
-    hasInitializer(integerLiteral(equals(0)))))))).bind("forLoop");
+    forStmt(hasLoopInit(declStmt(
+                hasSingleDecl(varDecl(hasInitializer(integerLiteral(equals(0))))
+                                  .bind("initVarName")))),
+            hasIncrement(unaryOperator(
+                hasOperatorName("++"),
+                hasUnaryOperand(declRefExpr(
+                    to(varDecl(hasType(isInteger())).bind("incVarName")))))),
+            hasCondition(binaryOperator(
+                hasOperatorName("<"),
+                hasLHS(ignoringParenImpCasts(declRefExpr(
+                    to(varDecl(hasType(isInteger())).bind("condVarName"))))),
+                hasRHS(expr(hasType(isInteger())))))).bind("forLoop");
 
 class LoopPrinter : public MatchFinder::MatchCallback {
 public :
-  virtual void run(const MatchFinder::MatchResult &Result) {
-    if (const ForStmt *FS = Result.Nodes.getNodeAs<clang::ForStmt>("forLoop"))
-      FS->dump();
-  }
+  virtual void run(const MatchFinder::MatchResult &Result);
+  // virtual void run(const MatchFinder::MatchResult &Result) {
+    // if (const ForStmt *FS = Result.Nodes.getNodeAs<clang::ForStmt>("forLoop"))
+      // FS->dump();
+  // }
 };
+
+static bool areSameVariable(const ValueDecl *First, const ValueDecl *Second) {
+  return First && Second &&
+         First->getCanonicalDecl() == Second->getCanonicalDecl();
+}
+
+void LoopPrinter::run(const MatchFinder::MatchResult &Result) {
+  ASTContext *Context = Result.Context;
+  const ForStmt *FS = Result.Nodes.getNodeAs<ForStmt>("forLoop");
+  // We do not want to convert header files!
+  if (!FS || !Context->getSourceManager().isWrittenInMainFile(FS->getForLoc()))
+    return;
+  const VarDecl *IncVar = Result.Nodes.getNodeAs<VarDecl>("incVarName");
+  const VarDecl *CondVar = Result.Nodes.getNodeAs<VarDecl>("condVarName");
+  const VarDecl *InitVar = Result.Nodes.getNodeAs<VarDecl>("initVarName");
+
+  if (!areSameVariable(IncVar, CondVar) || !areSameVariable(IncVar, InitVar))
+    return;
+  llvm::outs() << "Potential array-based loop discovered.\n";
+}
+
+
 // Apply a custom category to all command-line options so that they are the
 // only ones displayed.
 static llvm::cl::OptionCategory MyToolCategory("my-tool options");
