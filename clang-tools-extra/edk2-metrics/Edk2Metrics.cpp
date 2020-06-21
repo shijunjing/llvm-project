@@ -59,8 +59,10 @@ void LoopPrinter::run(const MatchFinder::MatchResult &Result) {
 
 /////////////////////////////////////////////////////////////////////////////
 DeclarationMatcher FunDeclBodyMatcher = functionDecl(hasBody(compoundStmt())).bind("funDeclBody");
-DeclarationMatcher FunDeclMatcher = functionDecl().bind("funDecl");
-StatementMatcher   CalleeMatcher = callExpr().bind("callee");
+DeclarationMatcher FunDeclMatcher =
+    functionDecl(isExpansionInMainFile()).bind("funDecl");
+StatementMatcher CalleeMatcher =
+    callExpr(isExpansionInMainFile()).bind("callee");
 
 
 class FunctionPrinter : public MatchFinder::MatchCallback {
