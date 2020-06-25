@@ -61,8 +61,12 @@ void LoopPrinter::run(const MatchFinder::MatchResult &Result) {
 DeclarationMatcher FunDeclBodyMatcher = functionDecl(hasBody(compoundStmt())).bind("funDeclBody");
 DeclarationMatcher FunDeclMatcher =
     functionDecl(isExpansionInMainFile()).bind("funDecl");
+//Match the function which has callee
+// StatementMatcher CallerMatcher =
+    // functionDecl(hasDescendant(compoundStmt(has(callExpr().bind("callee"))))).bind("caller");
+//Match all the function callees which are referred in a function definition
 StatementMatcher CalleeMatcher =
-    callExpr(isExpansionInMainFile()).bind("callee");
+    callExpr(hasAncestor(functionDecl().bind("caller"))).bind("callee");
 
 
 class FunctionPrinter : public MatchFinder::MatchCallback {
@@ -72,17 +76,17 @@ public :
     static int count = 0;
     llvm::outs() << "FunctionPrinter is called:" << count++ << "times \n";
 
-    if (const FunctionDecl *FD = Result.Nodes.getNodeAs<FunctionDecl>("funDecl")) {
-      const auto& SM = *Result.SourceManager;
-      const auto& Loc = FD->getLocation();
-      llvm::outs() << SM.getFilename(Loc) << ":"
-                   << FD->getNameInfo().getAsString() << ":"
-                   << SM.getSpellingLineNumber(Loc) << ":"
-                   << SM.getSpellingColumnNumber(Loc) << "\n";
-      if (FD->hasBody()){
-        FD->dump();
-      }
-    }
+    // if (const FunctionDecl *FD = Result.Nodes.getNodeAs<FunctionDecl>("funDecl")) {
+      // const auto& SM = *Result.SourceManager;
+      // const auto& Loc = FD->getLocation();
+      // llvm::outs() << SM.getFilename(Loc) << ":"
+                   // << FD->getNameInfo().getAsString() << ":"
+                   // << SM.getSpellingLineNumber(Loc) << ":"
+                   // << SM.getSpellingColumnNumber(Loc) << "\n";
+      // if (FD->hasBody()){
+        // FD->dump();
+      // }
+    // }
 
     // if (const auto  *FD = Result.Nodes.getNodeAs<clang::FunctionDecl>("funDeclBody")) {
       // const auto& SM = *Result.SourceManager;
@@ -93,23 +97,41 @@ public :
       // FD->dump();
     // }
 
-    if (const CallExpr *CE = Result.Nodes.getNodeAs<CallExpr>("callee")) {
+    if (const CallExpr *CalleeCE = Result.Nodes.getNodeAs<CallExpr>("callee")) {
+      //
+      //Callee info
+      //
       const auto& SM = *Result.SourceManager;
-      const auto& Loc = CE->getBeginLoc();
-
-      const FunctionDecl *FD = CE->getDirectCallee();
-      if (FD) {
-        llvm::outs() << SM.getFilename(Loc) << ":"
-                     << FD->getNameInfo().getAsString() << ":"
-                     << SM.getSpellingLineNumber(Loc) << ":"
-                     << SM.getSpellingColumnNumber(Loc) << "\n";
+      const auto& CalleeLoc = CalleeCE->getBeginLoc();
+      const FunctionDecl *CalleeFD = CalleeCE->getDirectCallee();
+      //const FunctionDecl *CalleeFD = dyn_cast_or_null<FunctionDecl>(CalleeCE->getCalleeDecl());
+      if (CalleeFD) {
+        llvm::outs() << "Callee: " << SM.getFilename(CalleeLoc) << ":"
+                     << CalleeFD->getNameInfo().getAsString() << ":"
+                     << SM.getSpellingLineNumber(CalleeLoc) << ":"
+                     << SM.getSpellingColumnNumber(CalleeLoc) << "\n";
       }else{
         // Function pointer
-        llvm::outs() << SM.getFilename(Loc) << ":"
-                     << SM.getSpellingLineNumber(Loc) << ":"
-                     << SM.getSpellingColumnNumber(Loc) << "\n";
+        llvm::outs() << "Callee: " << SM.getFilename(CalleeLoc) << ":"
+                     << SM.getSpellingLineNumber(CalleeLoc) << ":"
+                     << SM.getSpellingColumnNumber(CalleeLoc) << "\n";
       }
-      CE->dump();
+      //
+      //Caller info
+      //
+      const FunctionDecl *CallerFD = Result.Nodes.getNodeAs<FunctionDecl>("caller");
+      assert (CallerFD != nullptr);
+      const auto& CallerLoc = CallerFD->getLocation();
+      llvm::outs() << "Caller: " << SM.getFilename(CallerLoc) << ":"
+                   << CallerFD->getNameInfo().getAsString() << ":"
+                   << SM.getSpellingLineNumber(CallerLoc) << ":"
+                   << SM.getSpellingColumnNumber(CallerLoc) << "\n";
+      // for(int i = 0; i < CallerFD->getNumParams(); i++){
+          // if(CallerFD->getParamDecl(i)->getType()->isFunctionPointerType()){
+              //Do stuff here
+          // }
+      // }
+      CalleeCE->dump();
     }
   }
 };
@@ -137,7 +159,7 @@ int main(int argc, const char **argv) {
   MatchFinder Finder;
   //Finder.addMatcher(LoopMatcher, &Printer);
   //Finder.addMatcher(FunDeclBodyMatcher, &FunPrinter);
-  Finder.addMatcher(FunDeclMatcher, &FunPrinter);
+  //Finder.addMatcher(FunDeclMatcher, &FunPrinter);
   Finder.addMatcher(CalleeMatcher, &FunPrinter);
 
   return Tool.run(newFrontendActionFactory(&Finder).get());
