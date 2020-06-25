@@ -66,7 +66,8 @@ DeclarationMatcher FunDeclMatcher =
     // functionDecl(hasDescendant(compoundStmt(has(callExpr().bind("callee"))))).bind("caller");
 //Match all the function callees which are referred in a function definition
 StatementMatcher CalleeMatcher =
-    callExpr(hasAncestor(functionDecl().bind("caller"))).bind("callee");
+    callExpr(hasAncestor(functionDecl(isExpansionInMainFile()).bind("caller")))
+        .bind("callee");
 
 
 class FunctionPrinter : public MatchFinder::MatchCallback {
